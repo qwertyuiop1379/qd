@@ -1,3 +1,5 @@
+#include "defines.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -27,8 +29,7 @@ int main(int argc, char **argv, char **envp)
 	bool show_symbols = false;
 	bool show_links = false;
 
-	char *filename = malloc(sizeof(char) * 256);
-	*filename = '\0';
+	char *filename = NULL;
 
 	struct cpu *cpu = NULL;
 
@@ -142,6 +143,10 @@ int main(int argc, char **argv, char **envp)
 			show_links = true;
 			continue;
 		}
+
+
+		filename = malloc(sizeof(char) * (strlen(arg) + 1));
+		*filename = '\0';
 
 		strcpy(filename, arg);
 	}
@@ -273,7 +278,7 @@ int main(int argc, char **argv, char **envp)
 			continue;
 
 		cpu_found = true;
-		printf("Reading mach header with architecture %s%s%s.\n", CCYAN, cpu_name, CDEFAULT);
+		printf("Reading architecture %s%s%s.\n", CCYAN, cpu_name, CDEFAULT);
 
 		int *library_offsets = malloc(0);
 		int library_count = 0;

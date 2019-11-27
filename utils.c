@@ -1,3 +1,7 @@
+#define _CRT_SECURE_NO_WARNINGS
+
+#include "defines.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -131,7 +135,7 @@ void disassemble(uint32_t instr, char *asm_output)
 										}
 									}
 
-									// thank you qemu
+									// thank you qemu, this operation is horrid. /*
 									// https://github.com/qemu/qemu/blob/master/target/arm/translate-a64.c#L3696
 
 									int len = 31 - __builtin_clz((sh << 6) | (~imms & 0x3f));
@@ -160,6 +164,8 @@ void disassemble(uint32_t instr, char *asm_output)
 										mask |= mask << e;
 										e *= 2;
 									}
+
+									// */
 
 									sprintf(asm_output, "%1$s %2$c%3$d, %2$c%4$d, #0x%5$llx", inst, sf ? 'x' : 'w', rd, rn, mask);
 									break;
@@ -603,6 +609,18 @@ int swap_int32(int value)
 uint32_t swap_uint32_t(uint32_t value)
 {
     return (((value & 0x000000FF) << 24) | ((value & 0x0000FF00) <<  8) | ((value & 0x00FF0000) >>  8) | ((value & 0xFF000000) >> 24));
+}
+
+int64_t swap_int64_t(int64_t value)
+{
+    return ((((uint64_t)(value) & 0xff00000000000000ULL) >> 56) | 
+			(((uint64_t)(value) & 0x00ff000000000000ULL) >> 40) | 
+			(((uint64_t)(value) & 0x0000ff0000000000ULL) >> 24) | 
+			(((uint64_t)(value) & 0x000000ff00000000ULL) >>  8) | 
+			(((uint64_t)(value) & 0x00000000ff000000ULL) <<  8) | 
+			(((uint64_t)(value) & 0x0000000000ff0000ULL) << 24) | 
+			(((uint64_t)(value) & 0x000000000000ff00ULL) << 40) | 
+			(((uint64_t)(value) & 0x00000000000000ffULL) << 56));
 }
 
 static struct cpu_pair cpu_types[] = 

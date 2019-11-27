@@ -21,6 +21,8 @@
  * @APPLE_LICENSE_HEADER_END@
  */
 
+#include "defines.h"
+
 #include "mach-o.h"
 #include "utils.h"
 
@@ -91,10 +93,10 @@ void swap_segment_command_64(struct segment_command_64* sg, enum ByteOrder targe
 {
 	sg->cmd = swap_int32(sg->cmd);
 	sg->cmdsize = swap_int32(sg->cmdsize);
-	sg->vmaddr = OSSwapInt64(sg->vmaddr);
-	sg->vmsize = OSSwapInt64(sg->vmsize);
-	sg->fileoff = OSSwapInt64(sg->fileoff);
-	sg->filesize = OSSwapInt64(sg->filesize);
+	sg->vmaddr = swap_int64_t(sg->vmaddr);
+	sg->vmsize = swap_int64_t(sg->vmsize);
+	sg->fileoff = swap_int64_t(sg->fileoff);
+	sg->filesize = swap_int64_t(sg->filesize);
 	sg->maxprot = swap_int32(sg->maxprot);
 	sg->initprot = swap_int32(sg->initprot);
 	sg->nsects = swap_int32(sg->nsects);
