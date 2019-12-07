@@ -1,7 +1,3 @@
-#define _CRT_SECURE_NO_WARNINGS
-
-#include "defines.h"
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -56,9 +52,9 @@ void disassemble(uint32_t instr, char *asm_output)
 					{
 						if (mask(op0, op0_masks[ii]) == op0_instr[ii])
 						{
-							switch (ii)
+							switch (op0_instr[ii])
 							{
-								case 0:
+								case 0b000:
 								{
 									bool op = masks(instr, 0b1, 31);
 									int immhi = masks(instr, 0b111111111111111111, 5);
@@ -68,11 +64,11 @@ void disassemble(uint32_t instr, char *asm_output)
 									break;
 								}
 
-								case 1:
+								case 0b010:
 								{
 									int imm12 = masks(instr, 0b111111111111, 10);
 
-									char inst[5];
+									char inst[5] = { 0 };
 									if (op)
 										strcpy(inst, "sub");
 									else
@@ -80,7 +76,7 @@ void disassemble(uint32_t instr, char *asm_output)
 									if (s)
 										strcat(inst, "s");
 
-									char shift[14];
+									char shift[11] = { 0 };
 									if (sh)
 										sprintf(shift, ", lsl #0x%x", sh * 12);
 									else
@@ -90,7 +86,7 @@ void disassemble(uint32_t instr, char *asm_output)
 									break;
 								}
 
-								case 2:
+								case 0b011:
 								{
 									if ((s && sf) || (s || !sf))
 										goto unknown_instruction;
@@ -102,12 +98,12 @@ void disassemble(uint32_t instr, char *asm_output)
 									break;
 								}
 
-								case 3:
+								case 0b100:
 								{
 									if (!sf && sh)
 										goto unknown_instruction;
 
-									char inst[5];
+									char inst[5] = { 0 };
 									switch (opc)
 									{
 										case 0b00:
@@ -135,7 +131,7 @@ void disassemble(uint32_t instr, char *asm_output)
 										}
 									}
 
-									// thank you qemu, this operation is horrid. /*
+									// thank you qemu, this operation is horrid.
 									// https://github.com/qemu/qemu/blob/master/target/arm/translate-a64.c#L3696
 
 									int len = 31 - __builtin_clz((sh << 6) | (~imms & 0x3f));
@@ -165,20 +161,18 @@ void disassemble(uint32_t instr, char *asm_output)
 										e *= 2;
 									}
 
-									// */
-
 									sprintf(asm_output, "%1$s %2$c%3$d, %2$c%4$d, #0x%5$llx", inst, sf ? 'x' : 'w', rd, rn, mask);
 									break;
 								}
 
-								case 4:
+								case 0b101:
 								{
 									if (opc == 1 || (!sf && sh))
 										goto unknown_instruction;
 
 									int hw = masks(instr, 0b11, 21);
 									int imm16 = masks(instr, 0b1111111111111111, 5);
-									char shift[14];
+									char shift[12] = { 0 };
 
 									if (hw)
 										sprintf(shift, ", lsl #0x%x", hw * 16);
@@ -189,7 +183,7 @@ void disassemble(uint32_t instr, char *asm_output)
 									break;
 								}
 
-								case 5:
+								case 0b110:
 								{
 									if (opc == 3 || (!sf && sh) || (sf && !sh))
 										goto unknown_instruction;
@@ -200,7 +194,7 @@ void disassemble(uint32_t instr, char *asm_output)
 									break;
 								}
 
-								case 6:
+								case 0b111:
 								{
 									if (sf != sh || opc != 0 || (sf && masks(imms, 0b1, 5)))
 										goto unknown_instruction;
@@ -225,7 +219,7 @@ void disassemble(uint32_t instr, char *asm_output)
 				{
 					bool op0 = masks(instr, 0b1, 30);
 					bool op1 = masks(instr, 0b1, 28);
-					int op2 = masks(instr, 0b111, 21);
+					int op2 = masks(instr, 0b1111, 21);
 					int op3 = masks(instr, 0b111111, 10);
 
 					int rd = mask(instr, 0b11111);
@@ -238,7 +232,7 @@ void disassemble(uint32_t instr, char *asm_output)
 					{
 						bool s = masks(instr, 0b1, 29);
 
-						if (op0) // 1 source
+						if (op0)
 						{
 							if ((masks(rm, 0b1111, 1) != masks(rm, 0b0000, 1)) || s || (rm == 1 && !sf))
 								goto unknown_instruction;
@@ -246,12 +240,12 @@ void disassemble(uint32_t instr, char *asm_output)
 							if (rm == 0)
 							{
 								// thank god for the fact that these opcodes don't use masks
-								int op3_instr[] = { 0b000000, 0b000001, 0b000010, 0b000011, 0b000100, 0b000101, 0b000110, 0b000111, 0b001000, 0b001001, 0b0010011, 0b001100, 0b001101, 0b001110, 0b010000, 0b010001 };
+								int op3_group[] = { 0b000000, 0b000001, 0b000010, 0b000011, 0b000100, 0b000101, 0b000110, 0b000111, 0b001000, 0b001001, 0b0010011, 0b001100, 0b001101, 0b001110, 0b010000, 0b010001 };
 								for (int ii = 0; ii < 15; ii++)
 								{
-									if (op3 == op3_instr[ii])
+									if (op3 == op3_group[ii])
 									{
-										switch (op3)
+										switch (op3_group[ii])
 										{
 											case 0b000000:
 											{
@@ -291,6 +285,9 @@ void disassemble(uint32_t instr, char *asm_output)
 												sprintf(asm_output, "cls %1$c%2$d, %1$c%3$d", sf ? 'x' : 'w', rd, rn);
 												break;
 											}
+
+											default:
+												goto unknown_instruction;
 										}
 									}
 								}
@@ -298,15 +295,15 @@ void disassemble(uint32_t instr, char *asm_output)
 							else if (rm == 1 && s)
 							{
 								// yay no masks here either
-								int op3_instr[] = { 0b000000, 0b000001, 0b000010, 0b000011, 0b000100, 0b000101, 0b000110, 0b000111, 0b001000, 0b001001, 0b001010, 0b001011, 0b001100, 0b001101, 0b001110, 0b001111, 0b010000, 0b010001 };
+								int op3_group[] = { 0b000000, 0b000001, 0b000010, 0b000011, 0b000100, 0b000101, 0b000110, 0b000111, 0b001000, 0b001001, 0b001010, 0b001011, 0b001100, 0b001101, 0b001110, 0b001111, 0b010000, 0b010001 };
 								for (int ii = 0; ii < 17; ii++)
 								{
-									if (op3 == op3_instr[ii])
+									if (op3 == op3_group[ii])
 									{
 										if (op3 > 0b000111 && rm != 0b11111)
 											goto unknown_instruction;
 										
-										switch (op3)
+										switch (op3_group[ii])
 										{
 											case 0b000000:
 											{
@@ -314,12 +311,15 @@ void disassemble(uint32_t instr, char *asm_output)
 
 												break;
 											}
+
+											default:
+												goto unknown_instruction;
 										}
 									}
 								}
 							}
 						}
-						else // 2 source
+						else
 						{
 							if (s)
 							{
@@ -332,13 +332,13 @@ void disassemble(uint32_t instr, char *asm_output)
 							}
 							
 							int op3_masks[] = { 0b111111, 0b111111, 0b111111, 0b111111, 0b111111, 0b111111, 0b111111, 0b111111, 0b111111, 0b111111, 0b111000 };
-							int op3_instr[] = { 0b000000, 0b000010, 0b000011, 0b000100, 0b000101, 0b001000, 0b001001, 0b001010, 0b001011, 0b001100, 0b010000 };
+							int op3_group[] = { 0b000000, 0b000010, 0b000011, 0b000100, 0b000101, 0b001000, 0b001001, 0b001010, 0b001011, 0b001100, 0b010000 };
 
 							for (int ii = 0; ii < 10; ii++)
 							{
-								if (mask(op3, op3_masks[ii]) == op3_instr[ii])
+								if (mask(op3, op3_masks[ii]) == op3_group[ii])
 								{
-									switch (op3)
+									switch (op3_group[ii])
 									{
 										case 0b000000:
 										{
@@ -363,7 +363,7 @@ void disassemble(uint32_t instr, char *asm_output)
 											if (!sf)
 												goto unknown_instruction;
 
-											char optional[4];
+											char optional[4] = { 0 };
 											if (rm == 0)
 												sprintf(optional, "xzr");
 											else
@@ -436,6 +436,9 @@ void disassemble(uint32_t instr, char *asm_output)
 											sprintf(asm_output, "crc32%s%c w%d, w%d, w%d", c ? "c" : "", add, rd, rn, rm);
 											break;
 										}
+
+										default:
+											goto unknown_instruction;
 									}
 								}
 							}
@@ -444,65 +447,430 @@ void disassemble(uint32_t instr, char *asm_output)
 
 					if (op1)
 					{
+						int op2_masks[] = { 0b1111, 0b1111, 0b1111, 0b1000 };
+						int op2_group[] = { 0b0000, 0b0010, 0b0100, 0b1000 };
 						
-					}
-					else
-					{
-						int op2_masks[] = { 0b1000, 0b1001, 0b1001 };
-						int op2_instr[] = { 0b0000, 0b1000, 0b1001 };
+						int mask = mask(instr, 0b111);
+						int opc = masks(instr, 0b11, 29);
+						int cond = masks(instr, 0b1111, 12);
+						bool s = masks(instr, 0b1, 29);
+						bool o3 = masks(instr, 0b1, 4);
 
-						for (int ii = 0; ii < 2; ii++)
+						for (int ii = 0; ii < 3; ii++)
 						{
-							if (mask(op2, op2_masks[ii]) == op2_instr[ii])
+							if (mask(op2, op2_masks[ii]) == op2_group[ii])
 							{
-								switch (op2)
+								switch (op2_group[ii])
 								{
 									case 0b0000:
 									{
-										int opc = masks(instr, 0b11, 29);
-										int shift = masks(instr, 0b11, 22);
-										// bool n = masks(instr, 0b1, 21);
-										// int imm6 = masks(instr, 0b111111, 10);
+										int op3_masks[] = { 0b111111, 0b011111, 0b001111, 0b000010, 0b000010 };
+										int op3_group[] = { 0b000000, 0b000001, 0b000010, 0b000000, 0b000010 };
 
-										char shift_operation[4] = { 0 };
-										switch (shift)
+										int imm6 = masks(instr, 0b111111, 15);
+
+										for (int iii = 0; iii < 4; iii++)
 										{
-											case 0b00:
+											if (mask(op3, op3_masks[iii]) == op3_group[iii])
 											{
-												strcpy(shift_operation, "lsl");
-												break;
-											}
+												switch (op3_group[iii])
+												{
+													case 0b000000:
+													{
+														char inst[5] = { 0 };
+														switch (opc)
+														{
+															case 0b00:
+															{
+																strcpy(inst, "adc");
+																break;
+															}
 
-											case 0b01:
-											{
-												strcpy(shift_operation, "lsr");
-												break;
-											}
+															case 0b01:
+															{
+																strcpy(inst, "adcs");
+																break;
+															}
 
-											case 0b10:
-											{
-												strcpy(shift_operation, "asr");
-												break;
-											}
+															case 0b10:
+															{
+																strcpy(inst, "sbc");
+																break;
+															}
 
-											case 0b11:
-											{
-												strcpy(shift_operation, "ror");
-												break;
-											}
-										}
+															case 0b11:
+															{
+																strcpy(inst, "sbcs");
+																break;
+															}
+														}
 
-										switch (opc)
-										{
-											case 0b00:
-											{
+														sprintf(asm_output, "%1$s %2$c%3$d, %2$c%4$d, %2$c%5$d", inst, sf ? 'x' : 'w', rd, rn, rm);
+														break;
+													}
 
-												break;
+													case 0b000001:
+													{
+														if (opc != 0b01 || !sf || !o3)
+															goto unknown_instruction;
+
+														sprintf(asm_output, "rmif x%d, #0x%x, #0x%x", rn, imm6, mask);
+														break;
+													}
+
+													case 0b000010:
+													{
+														if (mask != 0b1101 || o3 || imm6 != 0b000000 || sf || opc != 0b01)
+															goto unknown_instruction;
+
+														bool sz = masks(instr, 0b1, 14);
+
+														sprintf(asm_output, "setf%d w%d", sz ? 16 : 8, rn);
+														break;
+													}
+												}
 											}
 										}
 
 										break;
 									}
+
+									case 0b0010:
+									{
+										bool o2 = masks(instr, 0b1, 10);
+
+										if (o3 || o2 || !s)
+											goto unknown_instruction;
+
+										char inst[5] = { 0 };
+										if (opc == 0b01)
+											strcpy(inst, "ccmn");
+										else
+											strcpy(inst, "ccmn");
+
+										char rm_imm5[6] = { 0 };
+										if (masks(instr, 0b1, 11))
+											sprintf(rm_imm5, "#0x%x", rm);
+										else
+											sprintf(rm_imm5, "%c%d", sf ? 'x' : 'w', rm);
+
+										sprintf(asm_output, "%s %c%d, %s, #0x%x, %s", inst, sf ? 'x' : 'w', rn, rm_imm5, mask, cond_string(cond));
+										break;
+									}
+
+									case 0b0100:
+									{
+										int op = masks(instr, 0b11, 10);
+
+										if (s || op > 0b1)
+											goto unknown_instruction;
+
+										char inst[6] = { 0 };
+										switch (opc + op)
+										{
+											case 0b00:
+											{
+												strcpy(inst, "csel");
+												break;
+											}
+
+											case 0b01:
+											{
+												strcpy(inst, "csinc");
+												break;
+											}
+
+											case 0b10:
+											{
+												strcpy(inst, "csinv");
+												break;
+											}
+
+											case 0b11:
+											{
+												strcpy(inst, "cseng");
+												break;
+											}
+										}
+
+										sprintf(asm_output, "%1$s %2$c%3$d, %2$c%4$d, %2$c%5$d, %6$s", inst, sf ? 'x' : 'w', rd, rn, rm, cond_string(cond));
+										break;
+									}
+
+									case 0b1000:
+									{
+										
+										break;
+									}
+
+									default:
+										goto unknown_instruction;
+								}
+							}
+						}
+					}
+					else
+					{
+						int op2_masks[] = { 0b1000, 0b1001, 0b1001 };
+						int op2_group[] = { 0b0000, 0b1000, 0b1001 };
+						
+						int shift = masks(instr, 0b11, 22);
+						int imm6 = masks(instr, 0b111111, 10);
+
+						for (int ii = 0; ii < 3; ii++)
+						{
+							if (mask(op2, op2_masks[ii]) == op2_group[ii])
+							{
+								switch (op2_group[ii])
+								{
+									case 0b0000:
+									{
+										if (!sf && masks(imm6, 0b1, 5))
+											goto unknown_instruction;
+
+										bool n = masks(instr, 0b1, 21);
+										int opc = masks(instr, 0b110, 28) + n;
+
+										char shift_string[12] = { 0 };
+
+										if (imm6)
+											sprintf(shift_string, ", %s #0x%x", decode_shift(shift), imm6);
+
+										char inst[5] = { 0 };
+										switch (opc)
+										{
+											case 0b000:
+											{
+												strcpy(inst, "and");
+												break;
+											}
+
+											case 0b001:
+											{
+												strcpy(inst, "bic");
+												break;
+											}
+
+											case 0b010:
+											{
+												strcpy(inst, "orr");
+												break;
+											}
+
+											case 0b011:
+											{
+												strcpy(inst, "orn");
+												break;
+											}
+
+											case 0b100:
+											{
+												strcpy(inst, "eor");
+												break;
+											}
+
+											case 0b101:
+											{
+												strcpy(inst, "eon");
+												break;
+											}
+
+											case 0b110:
+											{
+												strcpy(inst, "ands");
+												break;
+											}
+
+											case 0b111:
+											{
+												strcpy(inst, "bics");
+												break;
+											}
+										}
+
+										sprintf(asm_output, "%1$s %2$c%3$d, %2$c%4$d, %2$c%5$d%6$s", inst, sf ? 'x' : 'w', rd, rn, rm, shift_string);
+										break;
+									}
+
+									case 0b1000:
+									{
+										if ((!sf && masks(imm6, 0b1, 5)) || shift == 0b11)
+											goto unknown_instruction;
+
+										int opc = masks(instr, 0b11, 29);
+
+										char shift_string[12] = { 0 };
+										if (imm6)
+											sprintf(shift_string, ", %s #0x%x", decode_shift(shift), imm6);
+
+										char inst[5] = { 0 };
+										switch (opc)
+										{
+											case 0b00:
+											{
+												strcpy(inst, "add");
+												break;
+											}
+
+											case 0b01:
+											{
+												strcpy(inst, "adds");
+												break;
+											}
+
+											case 0b10:
+											{
+												strcpy(inst, "sub");
+												break;
+											}
+
+											case 0b11:
+											{
+												strcpy(inst, "subs");
+												break;
+											}
+										}
+										
+										sprintf(asm_output, "%1$s %2$c%3$d, %2$c%4$d, %2$c%5$d%6$s", inst, sf ? 'x' : 'w', rd, rn, rm, shift_string);
+										break;
+									}
+
+									case 0b1001:
+									{
+										int option = masks(instr, 0b111, 13);
+										int imm3 = masks(instr, 0b111, 10);
+										int opc = masks(instr, 0b11, 29);
+
+										if (shift != 0b00)
+											goto unknown_instruction;
+
+										char inst[5] = { 0 };
+										switch (opc)
+										{
+											case 0b00:
+											{
+												strcpy(inst, "add");
+												break;
+											}
+
+											case 0b01:
+											{
+												strcpy(inst, "adds");
+												break;
+											}
+
+											case 0b10:
+											{
+												strcpy(inst, "sub");
+												break;
+											}
+
+											case 0b11:
+											{
+												strcpy(inst, "subs");
+												break;
+											}
+										}
+
+										char extend[12] = { 0 };
+										char ex_op[5] = { 0 };
+										switch (option)
+										{
+											case 0b000:
+											{
+												strcpy(ex_op, "uxtb");
+												break;
+											}
+
+											case 0b001:
+											{
+												strcpy(ex_op, "uxth");
+												break;
+											}
+
+											case 0b010:
+											{
+												if (sf)
+												{
+													strcpy(ex_op, "uxtw");
+													break;
+												}
+
+												if (rd == 0b11111 || rn == 0b11111)
+												{
+													strcpy(ex_op, "lsl");
+													break;
+												}
+
+												strcpy(ex_op, "uxtw");
+												break;
+											}
+
+											case 0b011:
+											{
+												if (!sf)
+												{
+													strcpy(ex_op, "uxtx");
+													break;
+												}
+
+												if (rd == 0b11111 || rn == 0b11111)
+												{
+													strcpy(ex_op, "lsl");
+													break;
+												}
+
+												strcpy(ex_op, "uxtx");
+												break;
+											}
+
+											case 0b100:
+											{
+												strcpy(ex_op, "sxtb");
+												break;
+											}
+
+											case 0b101:
+											{
+												strcpy(ex_op, "sxth");
+												break;
+											}
+
+											case 0b110:
+											{
+												strcpy(ex_op, "sxtw");
+												break;
+											}
+
+											case 0b111:
+											{
+												strcpy(ex_op, "sxtx");
+												break;
+											}
+										}
+										
+										if (!imm3 && strcmp(ex_op, "lsl") == 0)
+											strcpy(extend, "");
+										else if (!imm3)
+											sprintf(extend, ", %s", ex_op);
+										else
+											sprintf(extend, ", %s #0x%x", ex_op, imm3);
+
+										char wxm[4] = { 0 };
+										char r;
+										if (mask(option, 0b011) == 0b011)
+											r = 'x';
+										else
+											r = 'w';
+
+										sprintf(wxm, "%c%d", r, rm);
+
+										sprintf(asm_output, "%1$s %2$c%3$d, %2$c%4$d, %5$s%6$s", inst, sf ? 'x' : 'w', rd, rn, wxm, extend);
+										break;
+									}
+
+									default:
+										goto unknown_instruction;
 								}
 							}
 						}
@@ -559,6 +927,14 @@ uint32_t read_uint32_t(FILE *file, int offset)
 	return r;
 }
 
+uint8_t read_byte(FILE *file, int offset)
+{
+	uint8_t r;
+	fseek(file, offset, SEEK_SET);
+	fread(&r, sizeof(uint8_t), 1, file);
+	return r;
+}
+
 void read_string(FILE *file, int offset, char *buffer, int buffer_size)
 {
 	sprintf(buffer, "");
@@ -601,7 +977,145 @@ void str_replace(char *target, const char *needle, const char *replacement)
     strcpy(target, buffer);
 }
 
-int swap_int32(int value)
+char *cond_string(int cond)
+{
+	static char cond_string[3] = { 0 };
+	switch (cond)
+	{
+		case 0b0000:
+		{
+			strcpy(cond_string, "eq");
+			break;
+		}
+
+		case 0b0001:
+		{
+			strcpy(cond_string, "ne");
+			break;
+		}
+
+		case 0b0010:
+		{
+			strcpy(cond_string, "hs");
+			break;
+		}
+
+		case 0b0011:
+		{
+			strcpy(cond_string, "mi");
+			break;
+		}
+
+		case 0b0100:
+		{
+			strcpy(cond_string, "mi");
+			break;
+		}
+
+		case 0b0101:
+		{
+			strcpy(cond_string, "pl");
+			break;
+		}
+
+		case 0b0110:
+		{
+			strcpy(cond_string, "vs");
+			break;
+		}
+
+		case 0b0111:
+		{
+			strcpy(cond_string, "vc");
+			break;
+		}
+
+		case 0b1000:
+		{
+			strcpy(cond_string, "hi");
+			break;
+		}
+
+		case 0b1001:
+		{
+			strcpy(cond_string, "ls");
+			break;
+		}
+
+		case 0b1010:
+		{
+			strcpy(cond_string, "ge");
+			break;
+		}
+
+		case 0b1011:
+		{
+			strcpy(cond_string, "lt");
+			break;
+		}
+
+		case 0b1100:
+		{
+			strcpy(cond_string, "gt");
+			break;
+		}
+
+		case 0b1101:
+		{
+			strcpy(cond_string, "le");
+			break;
+		}
+
+		case 0b1110:
+		{
+			strcpy(cond_string, "al");
+			break;
+		}
+
+		case 0b1111:
+		{
+			strcpy(cond_string, "nv");
+			break;
+		}
+	}
+
+	return cond_string;
+}
+
+char *decode_shift(int shift)
+{
+	static char shift_operation[4] = { 0 };
+	switch (shift)
+	{
+		case 0b00:
+		{
+			strcpy(shift_operation, "lsl");
+			break;
+		}
+
+		case 0b01:
+		{
+			strcpy(shift_operation, "lsr");
+			break;
+		}
+
+		case 0b10:
+		{
+			strcpy(shift_operation, "asr");
+			break;
+		}
+
+		case 0b11:
+		{
+			strcpy(shift_operation, "ror");
+			break;
+		}
+	}
+
+	return shift_operation;
+}
+
+int32_t swap_int32(int value)
 {
     return (((value & 0x000000FF) << 24) | ((value & 0x0000FF00) <<  8) | ((value & 0x00FF0000) >>  8) | ((value & 0xFF000000) >> 24));
 }
@@ -644,7 +1158,7 @@ char *name_for_cpu(struct cpu *cpu)
 			return cpu_types[i].cpu_name;
 	}
 
-	static char cpu_info[128];
+	static char cpu_info[128] = { 0 };
 	sprintf(cpu_info, "unknown: cpu_type (0x%x) cpu_subtype (0x%x)", cpu->cpu_type, cpu->cpu_subtype);
 
 	return cpu_info;
@@ -659,4 +1173,33 @@ struct cpu *cpu_for_name(char *cpu_name)
 	}
 
 	return NULL;
+}
+
+static char *load_command_strings[] =
+{
+	"LC_SEGMENT", "LC_SYMTAB", "LC_SYMSEG", "LC_THREAD", "LC_UNIXTHREAD", "LC_LOADFVMLIB", "LC_IDFVMLIB", "IC_IDENT", "LC_FVMFILE",
+	"LC_PREPAGE", "LC_DYSYMTAB", "LD_LOAD_DYLIB", "LC_ID_DYLIB", "LC_LOAD_DYLINKER", "LC_ID_DYLINKER", "LC_PREBOUND_DYLIB",
+	"LC_ROUTINES", "LC_SUB_FRAMEWORKS", "LC_SUB_UMBRELLA", "LC_SUB_CLIENT", "LC_SUB_LIBRARY", "LC_TWOLEVEL_HINTS", "LC_PREBIND_CKSUM",
+	"LC_LOAD_WEAK_DYLIB", "LC_SEGMENT_64", "LC_ROUTINES_64", "LC_UUID", "LC_RPATH", "LC_CODE_SIGNATURE", "LC_SEGMENT_SPLIT_INFO",
+	"LC_REEXPORT_DYLIB", "LC_LAZY_LOAD_DYLIB", "LC_ENCRYPTION_INFO", "LC_DYLD_INFO", "LC_LOAD_UPWARD_DYLIB", "LC_VERSION_MIN_MAXOSX",
+	"LC_VERSION_MIN_IPHONEOS", "LC_FUNCTION_STARTS", "LC_DYLD_ENVIRONMENT", "LC_MAIN", "LC_DATA_IN_CODE", "LC_SOURCE_VERSION",
+	"LC_DYLIB_CODE_SIGN_DRS", "LC_ENCRYPTION_INFO_64", "LC_LINKER_OPTION", "LC_LINKER_OPTIMIZATION_HINT", "LC_VERSION_MIN_TVOS",
+	"LC_VERSION_MIN_WATCHOS", "LC_NOTE", "LC_BUILD_VERSION", "LC_DYLD_EXPORTS_TRIE", "LC_DYLD_CHAINED_FIXUPS"
+};
+
+const char *load_command_string(uint32_t cmd)
+{
+	if (cmd == 0x80000000)
+		return "LC_REQ_DYLD";
+
+	if (cmd == (0x22 | 0x80000000))
+			return "LC_DYLD_INFO_ONLY";
+
+	if ((cmd & 0x80000000) == 0x80000000)
+		cmd = cmd & ~0x80000000;
+
+	if (cmd < 0x0 || cmd > 0x34)
+		return "unknown";
+
+	return load_command_strings[cmd - 1];
 }

@@ -21,8 +21,6 @@
  * @APPLE_LICENSE_HEADER_END@
  */
 
-#include "defines.h"
-
 #include "mach-o.h"
 #include "utils.h"
 

@@ -2,6 +2,7 @@
 #define utils_h
 
 #include <stdio.h>
+#include <stdbool.h>
 #include "mach-o.h"
 
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
@@ -44,12 +45,16 @@ struct cpu_pair {
 void disassemble(uint32_t instr, char *asm_output);
 void *read_bytes(FILE *file, int offset, int size);
 uint32_t read_uint32_t(FILE *file, int offset);
+uint8_t read_byte(FILE *file, int offset);
 void read_string(FILE *file, int offset, char *buffer, int buffer_size);
 void str_replace(char *target, const char *needle, const char *replacement);
+char *cond_string(int cond);
+char *decode_shift(int shift);
 int swap_int32(int value);
 uint32_t swap_uint32_t(uint32_t value);
 int64_t swap_int64_t(int64_t value);
 char *name_for_cpu(struct cpu *cpu);
 struct cpu *cpu_for_name(char *cpu_name);
+const char *load_command_string(uint32_t cmd);
 
 #endif

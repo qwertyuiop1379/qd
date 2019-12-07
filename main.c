@@ -1,5 +1,3 @@
-#include "defines.h"
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -8,29 +6,35 @@
 #include "mach-o.h"
 #include "utils.h"
 
-#define HELP_MESSAGE "qd: v1.0.0 - by qwertyuiop1379\n\n"\
-					"Usage:\n"\
+#define HELP_MESSAGE "\nqd: v1.0.0 - by qwertyuiop1379\n"\
+					CCYAN "Usage" CDEFAULT ":\n"\
 					"\t%1$s [options...] <mach-o file> : inspect mach-o file\n"\
 					"\t%1$s -i <arm64 instruction> : disassemble arm64 instruction\n"\
 					"\n"\
-					"Options:\n"\
-					"\t-a <arch>: choose architecture -- " CRED "required for operations on multi-arch files\n" CDEFAULT \
-					"\t-o : show mach-o information\n"\
-					"\t-s : print all symbols\n"\
-					"\t-d : show disassembly for __text\n"\
-					"\t-S : print all strings\n"\
-					"\t-l : print all linked libraries\n\n"
+					CCYAN "Mach-O info options" CDEFAULT ":\n"\
+					"\t-a <arch> : choose architecture -- " CRED "required for operations on multi-arch files\n" CDEFAULT \
+					"\t-c : print load commands\n"\
+					"\t-o : print mach-o information\n"\
+					"\t-s : print all symbols " CRED "(broken)\n" CDEFAULT \
+					"\t-d : print disassembly for __text\n"\
+					"\t-S : print all cstrings\n"\
+					"\t-l : print all linked libraries\n\n"\
+					CCYAN "Signing options" CDEFAULT ":\n"\
+					"\t--sign <entitlements> : sign binary with entitlements\n"\
+					"\t--entitlements : print a binary's entitlements\n"\
+					"\t--platformize : add the platform-application entitlement to a binary\n\n"\
 
 int main(int argc, char **argv, char **envp)
 {
+	bool show_commands = false;
 	bool show_macho = false;
 	bool show_disassembly = false;
 	bool show_strings = false;
 	bool show_symbols = false;
 	bool show_links = false;
+	bool show_entitlements = false;
 
 	char *filename = NULL;
-
 	struct cpu *cpu = NULL;
 
 	if (argc < 2)
@@ -81,6 +85,18 @@ int main(int argc, char **argv, char **envp)
 			}
 
 			a++;
+			continue;
+		}
+
+		if (strcmp(arg, "-c") == 0)
+		{
+			if (argc < 3)
+			{
+				printf(HELP_MESSAGE, argv[0]);
+				return 1;
+			}
+
+			show_commands = true;
 			continue;
 		}
 
@@ -141,6 +157,18 @@ int main(int argc, char **argv, char **envp)
 			}
 
 			show_links = true;
+			continue;
+		}
+
+		if (strcmp(arg, "--entitlements") == 0)
+		{
+			if (argc < 3)
+			{
+				printf(HELP_MESSAGE, argv[0]);
+				return 1;
+			}
+
+			show_entitlements = true;
 			continue;
 		}
 
@@ -280,6 +308,14 @@ int main(int argc, char **argv, char **envp)
 		cpu_found = true;
 		printf("Reading architecture %s%s%s.\n", CCYAN, cpu_name, CDEFAULT);
 
+		int symtab_offset;
+		int dysymtab_offset;
+		int linkedit_offset;
+
+		int seg_text_offset;
+		int seg_la_symbol_offset;
+		int seg_la_symbol_size;
+
 		int *library_offsets = malloc(0);
 		int library_count = 0;
 
@@ -289,18 +325,15 @@ int main(int argc, char **argv, char **envp)
 		int string_offset;
 		int string_size;
 
-		int la_symbol_offset;
-		int la_symbol_size;
-
-		struct symtab_command *symtab;
-		struct dysymtab_command *dysymtab;
-
 		for (int i = 0; i < ncmds; i++)
 		{
 			struct load_command *cmd = read_bytes(file, load_command_offset, sizeof(struct load_command));
 			
 			if (should_swap)
 				swap_load_command(cmd, 0);
+
+			if (show_commands)
+				printf("LC <0x%x - 0x%x>: %s (0x%x)\n", load_command_offset, load_command_offset + cmd->cmdsize, load_command_string(cmd->cmd), cmd->cmd);
 
 			if (cmd->cmd == LC_SEGMENT)
 			{
@@ -333,8 +366,8 @@ int main(int argc, char **argv, char **envp)
 					}
 					else if (strcmp(section->sectname, "__la_symbol_ptr") == 0)
 					{
-						la_symbol_offset = section->reserved1;
-						la_symbol_size = section->size / sizeof(uint64_t);
+						seg_la_symbol_offset = section->reserved1;
+						seg_la_symbol_size = section->size / sizeof(uint64_t);
 					}
 						
 					section_offset += sizeof(struct section);
@@ -349,6 +382,9 @@ int main(int argc, char **argv, char **envp)
 
 				if (should_swap)
 					swap_segment_command_64(segment, 0);
+
+				if (strcmp(segment->segname, "__TEXT") == 0)
+					seg_text_offset = arch_offsets[a] + segment->fileoff;
 
 				if (show_macho)
 					printf("\nSegment %d <0x%06llx - 0x%06llx>: %s%s%s: %s%d%s sections\n", i + 1, arch_offsets[a] + segment->fileoff, arch_offsets[a] + segment->fileoff + segment->filesize, CRED, segment->segname, CDEFAULT, CGREEN, segment->nsects, CDEFAULT);
@@ -374,8 +410,8 @@ int main(int argc, char **argv, char **envp)
 					}
 					else if (strcmp(section->sectname, "__la_symbol_ptr") == 0)
 					{
-						la_symbol_offset = section->reserved1;
-						la_symbol_size = section->size / sizeof(uint64_t);
+						seg_la_symbol_offset = section->reserved1;
+						seg_la_symbol_size = section->size / sizeof(uint64_t);
 					}
 						
 					section_offset += sizeof(struct section_64);
@@ -386,86 +422,92 @@ int main(int argc, char **argv, char **envp)
 			}
 			else if (cmd->cmd == LC_SYMTAB)
 			{
-				symtab = read_bytes(file, load_command_offset, sizeof(struct symtab_command));
+				symtab_offset = load_command_offset;
 			}
 			else if (cmd->cmd == LC_DYSYMTAB)
 			{
-				dysymtab = read_bytes(file, load_command_offset, sizeof(struct dysymtab_command));
+				dysymtab_offset = load_command_offset;
 			}
-			else if ((cmd->cmd == LC_LOAD_DYLIB || cmd->cmd == LC_ID_DYLIB))
+			else if (cmd->cmd == LC_LOAD_DYLIB || cmd->cmd == LC_ID_DYLIB)
 			{
 				library_offsets = realloc(library_offsets, sizeof(int) * library_count + 1);
 				library_offsets[library_count++] = load_command_offset;
+			}
+			else if (cmd->cmd == LC_CODE_SIGNATURE)
+			{
+				linkedit_offset = load_command_offset;
 			}
 
 			load_command_offset += cmd->cmdsize;
 			free(cmd);
 		}
 
+		// Mach-O options
+
 		if (show_symbols)
 		{
-			if (!symtab || !dysymtab)
-			{
-				err("Failed to find symbol table.\n");
-				return 1;
-			}
+			// if (!symtab || !dysymtab)
+			// {
+			// 	err("Failed to find symbol table.\n");
+			// 	return 1;
+			// }
 
-			printf("\n  Finding symbols...\n\n");
+			// printf("\n  Finding symbols...\n\n");
 
-			int indirect_offset = arch_offsets[a] + dysymtab->indirectsymoff;
-			int string_offset = arch_offsets[a] + symtab->stroff;
+			// int indirect_offset = arch_offsets[a] + dysymtab->indirectsymoff;
+			// int string_offset = arch_offsets[a] + symtab->stroff;
 
-			int *string_table = calloc(symtab->nsyms, sizeof(int) * symtab->nsyms);
-			int s = 0;
+			// int *string_table = calloc(symtab->nsyms, sizeof(int) * symtab->nsyms);
+			// int s = 0;
 
-			while (string_offset < arch_offsets[a] + symtab->stroff + symtab->strsize)
-			{
-				char string[1024] = { 0 };
-				read_string(file, string_offset, string, 1024);
+			// while (string_offset < arch_offsets[a] + symtab->stroff + symtab->strsize)
+			// {
+			// 	char string[1024] = { 0 };
+			// 	read_string(file, string_offset, string, 1024);
 
-				string_table[s] = string_offset;
+			// 	string_table[s] = string_offset;
 
-				if (strlen(string) > 0)
-					string_offset += strlen(string) * sizeof(char);
-				else
-					string_offset += sizeof(char);
+			// 	if (strlen(string) > 0)
+			// 		string_offset += strlen(string) * sizeof(char);
+			// 	else
+			// 		string_offset += sizeof(char);
 				
-				s++;
-			}
+			// 	s++;
+			// }
 
-			printf("Lazy symbols: \n");
-			for (int s = 0; s < la_symbol_size; s++)
-			{
-				int index = read_uint32_t(file, indirect_offset + (s + la_symbol_offset) * sizeof(uint32_t));
+			// printf("Lazy symbols: \n");
+			// for (int s = 0; s < la_symbol_size; s++)
+			// {
+			// 	int index = read_uint32_t(file, indirect_offset + (s + la_symbol_offset) * sizeof(uint32_t));
 
-				if (index < symtab->nsyms)
-				{
-					char string[1024] = { 0 };
-					read_string(file, string_table[index], string, 1024);
+			// 	if (index < symtab->nsyms)
+			// 	{
+			// 		char string[1024] = { 0 };
+			// 		read_string(file, string_table[index], string, 1024);
 
-					if (strlen(string) > 0)
-						printf("%s\n", string);
-				}
-			}
+			// 		if (strlen(string) > 0)
+			// 			printf("%s\n", string);
+			// 	}
+			// }
 
-			printf("\nSymbols: \n");
-			int symbol_offset = arch_offsets[a] + symtab->symoff;
+			// printf("\nSymbols: \n");
+			// int symbol_offset = arch_offsets[a] + symtab->symoff;
 
-			for (int s = 0; s < symtab->nsyms; s++)
-			{
-				struct nlist_64 *symbol = read_bytes(file, symbol_offset, sizeof(struct nlist_64));
+			// for (int s = 0; s < symtab->nsyms; s++)
+			// {
+			// 	struct nlist_64 *symbol = read_bytes(file, symbol_offset, sizeof(struct nlist_64));
 
-				char string[1024] = { 0 };
-				read_string(file, string_table[symbol->n_un.n_strx], string, 1024);
+			// 	char string[1024] = { 0 };
+			// 	read_string(file, string_table[symbol->n_un.n_strx], string, 1024);
 
-				if (strcmp(string, "") != 0)
-					printf("%s [%x]\n", string, symbol->n_type);
+			// 	if (strcmp(string, "") != 0)
+			// 		printf("%s [%x]\n", string, symbol->n_type);
 
-				free(symbol);
-				symbol_offset += sizeof(struct nlist_64);
-			}
+			// 	free(symbol);
+			// 	symbol_offset += sizeof(struct nlist_64);
+			// }
 
-			printf("\n");
+			// printf("\n");
 		}
 
 		if (show_disassembly)
@@ -489,8 +531,6 @@ int main(int argc, char **argv, char **envp)
 
 				offset += sizeof(uint32_t);
 			}
-
-			// free(symbol_name);
 		}
 
 		if (show_strings)
@@ -526,13 +566,43 @@ int main(int argc, char **argv, char **envp)
 				read_string(file, library_offsets[l] + dylib->dylib.name.offset, dylib_name, 1024);
 
 				printf("Linked library: '%s%s%s'\n", CYELLOW, dylib_name, CDEFAULT);
-
 				free(dylib);
 			}
 		}
-		
-		free(symtab);
-		free(dysymtab);
+
+		// Signing options
+
+		if (show_entitlements)
+		{
+			if (!linkedit_offset)
+			{
+				err("File does not contain a code signature.\n");
+				return 1;
+			}
+
+			struct linkedit_data_command *linkedit = read_bytes(file, linkedit_offset, sizeof(struct linkedit_data_command));
+			struct linkedit_section *linkedit_section = read_bytes(file, arch_offsets[a] + linkedit->dataoff, linkedit->datasize);
+
+			for (int i = 0; i < linkedit_section->count; i++)
+			{
+				uint32_t type = masks(linkedit_section->index[i], 0xffffffff00000000, 32);
+				if (type == 5)
+				{
+					uint32_t begin = mask(linkedit_section->index[i], 0xffffffff);
+					uint32_t length = linkedit_section->length - sizeof(uint64_t);
+					uint32_t offset = arch_offsets[a] + linkedit->dataoff + begin + sizeof(uint64_t);
+
+					char entitlements[512] = { 0 };
+					read_string(file, offset, entitlements, 512);
+
+					printf("Entitlements: %s\n", entitlements);
+				}
+			}
+
+			free(linkedit_section);
+			free(linkedit);
+		}
+
 		free(library_offsets);
 	}
 

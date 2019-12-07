@@ -26,6 +26,10 @@
 
 #include <stdint.h>
 
+#ifdef __linux__
+    #define uint64_t unsigned long long
+#endif
+
 typedef int cpu_type_t;
 typedef int cpu_subtype_t;
 
@@ -71,6 +75,15 @@ typedef int vm_prot_t;
 #define	LC_LOAD_DYLIB 0xc
 #define	LC_ID_DYLIB 0xd
 #define	LC_SEGMENT_64 0x19
+#define LC_CODE_SIGNATURE 0x1d
+#define LC_FUNCTION_STARTS 0x26
+
+struct linkedit_section {
+    uint32_t magic;
+    uint32_t length;
+    uint32_t count;
+    uint64_t index[];
+};
 
 struct mach_header {
 	uint32_t magic;
@@ -217,6 +230,13 @@ struct dysymtab_command
 	uint32_t nextrel;
 	uint32_t locreloff;
 	uint32_t nlocrel;
+};
+
+struct linkedit_data_command {
+    uint32_t cmd;
+    uint32_t cmdsize;
+    uint32_t dataoff;
+    uint32_t datasize;
 };
 
 struct nlist {
