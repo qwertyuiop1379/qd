@@ -1,9 +1,0 @@
-Package: com.qiop1379.qd
-Name: qd
-Architecture: iphoneos-arm
-Description: Taking the J out of jtool
-Maintainer: qwertyuiop1379
-Author: qwertyuiop1379
-Section: System
-Tag: role::hacker
-Version: 0.0.1
